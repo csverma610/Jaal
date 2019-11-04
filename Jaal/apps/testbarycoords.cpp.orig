@@ -1,0 +1,147 @@
+#include "Mesh.hpp"
+
+#include "BarycentricCoords.hpp"
+#include "AllQuadMeshGenerator.hpp"
+#include "AllHexMeshGenerator.hpp"
+
+
+double getVal( double x, double y)
+{
+    return 0.1*x + 0.3*y;
+}
+
+
+int main()
+{
+    /*
+        int dim[] = {5,5,5};
+        double len[] = { 2.0, 2.0, 2.0};
+        double org[] = { -1.0, -1.0, -1.0};
+        JMeshPtr quadmesh = AllQuadMeshGenerator::getStructuredMesh( dim, len, org );
+
+        JMeshIO::saveAs(quadmesh, "a.xml");
+        exit(0);
+    */
+
+    JMeshPtr  mesh = JMeshIO::readFile("testbary.1.ele");
+
+    vector<Point2D>   cageCoords(4);
+    vector<double>    scalarField(4);
+
+    cageCoords[0][0] = 0.0;
+    cageCoords[0][1] = 0.0;
+
+    cageCoords[1][0] = 1.0;
+    cageCoords[1][1] = 0.0;
+
+    cageCoords[2][0] = 1.00;
+    cageCoords[2][1] = 1.00;
+
+    cageCoords[3][0] =  0.0;
+    cageCoords[3][1] =  1.0;
+
+    scalarField[0] = getVal(0.0, 0.0);
+    scalarField[1] = getVal(1.0, 0.0);
+    scalarField[2] = getVal(1.0, 1.0);
+    scalarField[3] = getVal(0.0, 1.0);
+
+    JMeanValueCoordinates mvc;
+
+    int numnodes = mesh->getSize(0);
+    Point2D qPoint;
+    vector<double> shapefunc0, shapefunc2;
+
+    /*
+        qPoint[0] = 0.5;
+        qPoint[1] = 1.0;
+        mvc.getCoords(cageCoords, qPoint, shapefunc);
+        double sum = 0.0;
+        for( int j = 0; j < 4; j++)
+             sum += shapefunc[j]*scalarField[j];
+        cout << sum << endl;
+        exit(0);
+    */
+
+    double maxerror = 0.0;
+    vector<Vec2D> grad, gradP(4), gradM(4);
+    Point2D qPoint2;
+    double  h = 0.00001;
+    int err;
+
+    qPoint[0] = 0.5;
+    qPoint[1] = 0.5;
+    mvc.getCoords(cageCoords, qPoint, shapefunc0);
+    err = mvc.getShapeGradients( cageCoords, qPoint, grad);
+    cout << "Analytical " << endl;
+    cout << grad[0][0] << "  " << grad[1][0] << " " << grad[2][0] << " " << grad[3][0] << endl;
+    cout << grad[0][1] << "  " << grad[1][1] << " " << grad[2][1] << " " << grad[3][1] << endl;
+
+    qPoint2[0] = qPoint[0] + h;
+    qPoint2[1] = qPoint[1];
+    err = mvc.getCoords(cageCoords, qPoint2, shapefunc2);
+     
+    for( int j = 0; j < 4; j++)  {
+            gradP[j][0] = (shapefunc2[j] - shapefunc0[j] )/h;
+            maxerror = max( maxerror, fabs(grad[j][0]-gradP[j][0]) );
+        }
+        cout << " Numerical " << endl;
+        cout << gradP[0][0] << "  " << gradP[1][0] << " " << gradP[2][0] << " " << gradP[3][0] << endl;
+        cout << gradP[0][1] << "  " << gradP[1][1] << " " << gradP[2][1] << " " << gradP[3][1] << endl;
+        cout << "Maxrrror " << maxerror << endl;
+
+
+    for( int i = 0;  i < numnodes; i++) {
+        qPoint = mesh->getNodeAt(i)->getXYCoords();
+        mvc.getCoords(cageCoords, qPoint, shapefunc0);
+        err = mvc.getShapeGradients( cageCoords, qPoint, grad);
+        if( !err ) {
+            qPoint2[0] = qPoint[0] + h;
+            qPoint2[1] = qPoint[1];
+            err = mvc.getCoords(cageCoords, qPoint2, shapefunc2);
+            maxerror = 0.0;
+            if( !err ) {
+                cout << "Point2D " << qPoint[0] << " " << qPoint[1] << endl;
+                cout << "Analytical " << endl;
+                cout << grad[0][0] << "  " << grad[1][0] << " " << grad[2][0] << " " << grad[3][0] << endl;
+                cout << grad[0][1] << "  " << grad[1][1] << " " << grad[2][1] << " " << grad[3][1] << endl;
+                for( int j = 0; j < 4; j++)  {
+                    gradP[j][0] = (shapefunc2[j] - shapefunc0[j] )/h;
+                    maxerror = max( maxerror, fabs(grad[j][0]-gradP[j][0]) );
+                }
+                cout << " Numerical " << endl;
+                cout << gradP[0][0] << "  " << gradP[1][0] << " " << gradP[2][0] << " " << gradP[3][0] << endl;
+                cout << gradP[0][1] << "  " << gradP[1][1] << " " << gradP[2][1] << " " << gradP[3][1] << endl;
+                cout << "Maxrrror " << maxerror << endl;
+                getchar();
+            }
+            qPoint2[0] = qPoint[0];
+            qPoint2[1] = qPoint[1]+h;
+            err = mvc.getCoords(cageCoords, qPoint2, shapefunc2);
+            if( !err) {
+                for( int j = 0; j < 4; j++)  {
+                    gradP[j][1] = (shapefunc2[j] - shapefunc0[j] )/h;
+                    maxerror = max( maxerror, fabs(grad[j][1]-gradP[j][1]) );
+                }
+            }
+        }
+        /*
+                double sum = 0.0;
+                for( int j = 0; j < 4; j++)
+                     sum += shapefunc[j]*scalarField[j];
+                double val = getVal(qPoint[0], qPoint[1] );
+                double err = fabs(sum - val );
+                maxerror = max( maxerror, err);
+                cout << qPoint[0] << " " << qPoint[1] << " " << " Calculated " << sum << " Exact " << val << " Error " << err << endl;
+
+        */
+    }
+    cout << "Maxerror " << maxerror << endl;
+
+
+    /*
+        mvc.setFieldValues( cageCoords, scalarField, mesh, "MVC");
+        JMeshVTKExporter mexp;
+        mexp.addNodeAttribute("MVC");
+        mexp.writeFile(mesh, "mvc.vtk");
+    */
+}

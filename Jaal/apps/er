@@ -1,0 +1,24 @@
+g++ -o fire testPoisson2D.o ../AllQuadMeshGenerator.o ../Mesh.o ../MeshTopology.o ../MeshGeometry.o ../MinDiam.o ../MinBox.o ../MeshImporter.o ../MeshExporter.o ../MeshQuality.o ../Logger.o ../MeshRelManager.o ../off_io.o ../obj_io.o ../xml_io.o ../vtk_io.o ../tri_io.o ../gmsh_io.o ../povray_io.o ../medit_io.o ../Node.o ../Edge.o ../Face.o ../Cell.o ../Simplex.o ../Geometry.o ../MeshRefine3D.o ../tfiblend.o ../GeomPredicates.o ../DelaunayMesh2D.o ../BoundingBox.o -lgomp -pthread -L/home/csverma/Disk/Software/Mesh/Verdict/lib -lverdict -L/home/csverma/Disk/Software/CompGeom/ANN/lib -lANN
+../Edge.o: In function `JEdgeGeometry::intersectPredicate2d(double const*, double const*, double const*, double const*)':
+Edge.cpp:(.text+0xc6e): undefined reference to `JGeomPredicates::getPointOrientation(double const*, double const*, double const*, int)'
+Edge.cpp:(.text+0xd4b): undefined reference to `JGeomPredicates::getPointOrientation(double const*, double const*, double const*, int)'
+Edge.cpp:(.text+0xdf2): undefined reference to `JGeomPredicates::getPointOrientation(double const*, double const*, double const*, int)'
+Edge.cpp:(.text+0xe7b): undefined reference to `JGeomPredicates::getPointOrientation(double const*, double const*, double const*, int)'
+../Face.o: In function `JFaceGeometry::getDualPosition(std::shared_ptr<JFace>, std::array<double, 3ul>&)':
+Face.cpp:(.text+0x1df2): undefined reference to `TriCircumCenter3D(double const*, double const*, double const*, double*, double*)'
+../MeshRefine3D.o: In function `JHexRefiner::refine17(std::shared_ptr<JCell> const&, std::vector<std::shared_ptr<JNode>, std::allocator<std::shared_ptr<JNode> > >&, std::vector<std::shared_ptr<JCell>, std::allocator<std::shared_ptr<JCell> > >&)':
+MeshRefine3D.cpp:(.text+0x301): undefined reference to `JBernHexOps::Op1_7(std::shared_ptr<JHexahedron>, std::vector<std::shared_ptr<JNode>, std::allocator<std::shared_ptr<JNode> > >&, std::vector<std::shared_ptr<JCell>, std::allocator<std::shared_ptr<JCell> > >&)'
+../DelaunayMesh2D.o: In function `Jaal::JDelaunayMesh2D::getIntrinsicMesh()':
+DelaunayMesh2D.cpp:(.text+0xf50): undefined reference to `Jaal::JSwapTriEdge::execute()'
+../DelaunayMesh2D.o: In function `Jaal::JDelaunayMesh2D::getRemeshed()':
+DelaunayMesh2D.cpp:(.text+0x141c): undefined reference to `Jaal::JSwapTriEdge::execute()'
+../DelaunayMesh2D.o: In function `Jaal::JDelaunayMesh2D::build(std::vector<double, std::allocator<double> >&, std::vector<int, std::allocator<int> >&, std::vector<double, std::allocator<double> >&)':
+DelaunayMesh2D.cpp:(.text+0x1c10): undefined reference to `triangulate'
+../DelaunayMesh2D.o: In function `Jaal::JDelaunayMesh2D::getMedialAxis()':
+DelaunayMesh2D.cpp:(.text+0x411b): undefined reference to `JPointLocation::JPointLocation()'
+DelaunayMesh2D.cpp:(.text+0x4127): undefined reference to `JPointLocation::setMesh(std::shared_ptr<JMesh> const&)'
+DelaunayMesh2D.cpp:(.text+0x437c): undefined reference to `TriCircumCenter2D(double const*, double const*, double const*, double*)'
+DelaunayMesh2D.cpp:(.text+0x4459): undefined reference to `JPointLocation::searchFace(std::array<double, 3ul> const&, bool)'
+collect2: error: ld returned 1 exit status
+Makefile:47: recipe for target 'fire' failed
+make: *** [fire] Error 1

@@ -1,0 +1,1688 @@
+#include "Poisson2D.hpp"
+#include <iomanip>
+#include"MeshOptimization.hpp"
+#include "MeshRefine.hpp"
+#include "AllQuadMeshGenerator.hpp"
+#include "AllTriMeshGenerator.hpp"
+
+struct JConstantField : public JFieldFunction
+{
+    double  getScalar( const Point2D &) const { 
+      return  0.0; 
+    }
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////
+int testSquare()
+{
+   int grid_dim[]   = {4, 4};
+   double length[]  = {1, 1};
+   double origin[]  = {0.0, 0.0};
+   JMeshPtr qmesh = AllQuadMeshGenerator::getStructuredMesh(grid_dim, length, origin);
+   JMeshPtr  mesh = AllTriMeshGenerator::fromQuadMesh( qmesh, 2);
+   mesh->getTopology()->search_boundary();
+
+/*
+    cout << "Solving Poisson equation in a square domain " << endl;
+    int  xlength = 1.0;
+    int  ylength = 1.0;
+    int  npoints = 0;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << "4 2 0 0" << endl;
+
+//    ofile << npoints   << "  " << -0.5*xlength << " " << -0.5*ylength << endl;
+//    ofile << npoints+1 << "  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+//    ofile << npoints+2 << "  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+//    ofile << npoints+3 << "  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << npoints   << "  " <<  0.0 << " " <<  0.0 << endl;
+    ofile << npoints+1 << "  " <<  1.0 << " " <<  0.0 << endl;
+    ofile << npoints+2 << "  " <<  1.0 << " " <<  1.0 << endl;
+    ofile << npoints+3 << "  " <<  0.0 << " " <<  1.0 << endl;
+
+    ofile << "4 1 " << endl;
+    ofile << npoints   << "  " << npoints   << "  " << npoints+1 <<  " 1 " << endl;
+    ofile << npoints+1 << "  " << npoints+1 << "  " << npoints+2 <<  " 2 " << endl;
+    ofile << npoints+2 << "  " << npoints+2 << "  " << npoints+3 <<  " 3 " << endl;
+    ofile << npoints+3 << "  " << npoints+3 << "  " << npoints   <<  " 4 " << endl;
+
+    ofile << " 0 " << endl;
+    ofile.close();
+
+    system( "triangle -peq30a0.0001 test.poly");
+    JMeshPtr mesh = JMeshIO::readFile( "test.1.ele");
+*/
+
+   JPoisson2D  poisson;
+   poisson.setOrder(1);
+   poisson.setMesh(mesh);
+   poisson.checkTangle(0);
+
+   size_t numnodes = mesh->getSize(0);
+   for( size_t i  = 0; i < numnodes; i++) {
+        const JNodePtr &vtx = mesh->getNodeAt(i);
+        if( vtx->isBoundary() ) {
+            const Point3D &xyz = vtx->getXYZCoords();
+            double x = xyz[0];
+            double y = xyz[1];
+            if( x < 1.0E-10) {
+                poisson.setDirichletValue(vtx,  1 + x*x + 2*y*y);
+            }
+            if( x > 0.9999) {
+                poisson.setDirichletValue(vtx,  1 + x*x + 2*y*y);
+            }
+         }
+    }
+
+    EdgeSequence edges;
+    double val = 0.0;
+    mesh->getEntities("Boundary", 1, edges);
+    poisson.setNeumannValue( edges, val);
+    
+    val = -4.0;
+    mesh->getEntities("Boundary", 3, edges);
+    poisson.setNeumannValue( edges, val);
+
+    boost::shared_ptr<JFieldFunction>  field( new JConstantField);
+    poisson.setFieldFunction( field );
+   
+   poisson.solve();
+   poisson.saveAs("poisson.vtk", "U");
+   cout << "Done " << endl;
+   exit(0);
+
+   double ucal, uexact;
+   double maxerror = 0.0;
+   for( size_t i  = 0; i < numnodes; i++) {
+        const JNodePtr &vtx = mesh->getNodeAt(i);
+        const Point3D  &xyz = vtx->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        vtx->getAttribute("U", ucal);
+        uexact =  1 + x*x + 2*y*y;
+        maxerror = max( maxerror, fabs(ucal-uexact));
+        cout << maxerror << endl;
+    }
+    cout << "Maximum Error " << maxerror << endl;
+ 
+        
+        
+    
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+int testLShape()
+{
+    cout << "Solving Poisson equation in a square domain " << endl;
+    int  xlength = 1.0;
+    int  ylength = 1.0;
+    int  npoints = 0;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << "6 2 0 0" << endl;
+
+    ofile << " 0  0.0 1.0 " << endl;
+    ofile << " 1  1.0 1.0 " << endl;
+    ofile << " 2  1.0 0.0 " << endl;
+    ofile << " 3  2.0 0.0 " << endl;
+    ofile << " 4  2.0 2.0 " << endl;
+    ofile << " 5  0.0 2.0 " << endl;
+
+    ofile << "6 1 " << endl;
+    ofile << "1  0 1   1"  << endl;
+    ofile << "2  1 2   2" << endl;
+    ofile << "3  2 3   3" << endl;
+    ofile << "4  3 4   4" << endl;
+    ofile << "5  4 5   5" << endl;
+    ofile << "6  5 0   6" << endl;
+    ofile << " 0 " << endl;
+    ofile.close();
+
+   system( "triangle -peq30a0.001 test.poly");
+   JMeshPtr mesh = JMeshIO::readFile( "test.1.ele");
+
+   JPoisson2D  poisson;
+   poisson.setOrder(1);
+   poisson.setMesh(mesh);
+   poisson.checkTangle(0);
+
+   EdgeSequence edges;
+
+    double val = 0.0;
+    mesh->getEntities("Boundary", 6, edges);
+    assert( !edges.empty() );
+    poisson.setDirichletValue( edges, val);
+
+    val = 1.0;
+    mesh->getEntities("Boundary", 3, edges);
+    assert( !edges.empty() );
+    poisson.setDirichletValue( edges, val);
+
+   boost::shared_ptr<JFieldFunction>  field( new JConstantField);
+   poisson.setFieldFunction( field );
+   
+   poisson.solve();
+   poisson.saveAs("poisson.vtk", "U");
+    
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+#ifdef CSV
+
+int testFork()
+{
+    vector<size_t> permute;
+
+    double len1 = 0.5;
+    double len2 = 1.5;
+    double len3 = 0.5;
+    double len4 = 0.5;
+    double len5 = 2.0;
+    double len6 = 0.5;
+
+    int  npoints = 0;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << "12 2 0 0" << endl;
+
+    ofile << "0  "   << "  " <<  0.5*len1 << " " <<  "0.0" << endl;
+    ofile << "1 "    << "  " <<  0.5*len1 << " " <<  len2  << endl;
+    ofile << "2 "   << "  " <<   0.5*len1+len3 << " " <<  len2  << endl;
+    ofile << "3 "   << "  " <<   0.5*len1+len3 << " " <<  len2+len4+len5  << endl;
+    ofile << "4 "   << "  " <<   0.5*len1+len3-len6  << " " <<  len2+len4+len5  << endl;
+    ofile << "5 "   << "  " << 0.5*len1+len3-len6 << " " <<  len2+len4  << endl;
+
+    ofile << "6 "   << "  " << -0.5*len1+len3-len6 << " " <<  len2+len4  << endl;
+    ofile << "7 "   << "  " << -(0.5*len1+len3-len6) << " " <<  len2+len4+len5  << endl;
+    ofile << "8 "   << "  " << -(0.5*len1+len3) << " " <<  len2+len4+len5  << endl;
+    ofile << "9 "   << "  " << -(0.5*len1+len3) << " " <<  len2  << endl;
+    ofile << "10 "   << "  " << -0.5*len1 << " " <<  len2  << endl;
+    ofile << "11 "   << "  " << -0.5*len1 << " " <<  "0.0" << endl;
+
+    ofile << "12 1 " << endl;
+    ofile << "0   11  0  1 " << endl;
+    ofile << "1   0   1  2 " << endl;
+    ofile << "2   1   2  3 " << endl;
+    ofile << "3   2   3  4 " << endl;
+    ofile << "4   3   4  5 " << endl;
+    ofile << "5   4   5  6 " << endl;
+    ofile << "6   5   6  7 " << endl;
+    ofile << "7   6   7  8 " << endl;
+    ofile << "8   7   8  9 " << endl;
+    ofile << "9   8   9 10 " << endl;
+    ofile << "10  9  10 11 " << endl;
+    ofile << "11  10 11 12 " << endl;
+
+    ofile << " 0 " << endl;
+    ofile.close();
+
+    system( "triangle -peq30a0.005 test.poly");
+
+    JMeshPtr mesh = MeshIO::readFile("test.1.ele");
+
+
+/*
+    JPoisson2D  poisson;
+    poisson.setOrder(1);
+    poisson.checkTangle(0);
+    poisson.setMesh(mesh);
+
+    int val;
+
+    EdgeSequence edges;
+    mesh->getEntities("Boundary", 1, edges);
+    assert( !edges.empty() ) ;
+    poisson.setField(edges, 0.0);
+
+    mesh->getEntities("Boundary", 5, edges);
+    assert( !edges.empty() ) ;
+    poisson.setField(edges, 1.0);
+
+    mesh->getEntities("Boundary", 9, edges);
+    assert( !edges.empty() ) ;
+    poisson.setField(edges, 1.0);
+
+    poisson.solve();
+
+    poisson.solve();
+    poisson.saveAs("anim.vtk", "U");
+    cout << "New Data stored in anim.vtk" << endl;
+*/
+
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+int testSqrCircle()
+{
+    vector<size_t> permute;
+
+    int  xlength   = 50.0;
+    int  ylength   = 50.0;
+    double  radius = 10.0;
+
+    int  npoints = 100;
+    double dtheta = 2*M_PI/( double)npoints;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << npoints+4 << " 2  0  0" << endl;
+
+    for( int i = 0; i < npoints; i++)  {
+        double x = radius*cos(i*dtheta);
+        double y = radius*sin(i*dtheta);
+        ofile << i  << " " << x << "  " << y << endl;
+    }
+    ofile << npoints   << "  " << -0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << npoints+1 << "  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << npoints+2 << "  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+    ofile << npoints+3 << "  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << npoints + 4 <<  "  1 " << endl;
+    for( int i = 0; i < npoints; i++)
+        ofile << i << "  " << i << " " << (i+1)%npoints << " 1 " << endl;
+
+    ofile << npoints   << "  " << npoints   << "  " << npoints+1 <<  " 2 " << endl;
+    ofile << npoints+1 << "  " << npoints+1 << "  " << npoints+2 <<  " 2 " << endl;
+    ofile << npoints+2 << "  " << npoints+2 << "  " << npoints+3 <<  " 2 " << endl;
+    ofile << npoints+3 << "  " << npoints+3 << "  " << npoints   <<  " 2 " << endl;
+
+    ofile << " 1 " << endl;
+    ofile << " 0  0.0 0.0 " << endl;
+    ofile.close();
+    system( "triangle -peq30a1.0 test.poly");
+
+    JMeshPtr mesh = MeshIO::readFile("test.1.ele");
+ 
+/*
+    JPoisson2D  poisson;
+    poisson.setOrder(1);
+    poisson.checkTangle(0);
+    poisson.setMesh(mesh);
+    poisson.setNumPrimaryFaceGaussPoints(7);
+
+    int val;
+
+    EdgeSequence edges;
+    val  = 1;
+    mesh->getEntities("Boundary", val, edges);
+    assert( !edges.empty() ) ;
+    poisson.setField(edges, 0.0);
+
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    assert( !edges.empty() ) ;
+    poisson.setField(edges, 100.0);
+
+    poisson.solve();
+    poisson.saveAs("anim.vtk", "U");
+    cout << "New Data stored in anim.vtk" << endl;
+*/
+
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+#endif
+
+int main()
+{
+    testLShape();
+    exit(0);
+   
+
+    testSquare();
+    return 0;
+}
+/////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#ifdef CSV
+
+int testmodel3()
+{
+    Mesh *mesh = Mesh::newObject();
+    double l = 1.0;
+    double L = 5.0;
+    double m = 1.0;
+    double M = 5.0;
+
+    NodeSequence nodes(16);
+    for( int i = 0; i < 16; i++)
+         nodes[i] = Vertex::newObject();
+
+    Point3D xyz;
+    xyz[2] = 0.0;
+
+    xyz[0] = -0.5*L;
+    xyz[1] = -0.5*M;
+    nodes[0]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*l;
+    xyz[1] = -0.5*M;
+    nodes[1]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*l;
+    xyz[1] = -0.5*M;
+    nodes[2]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*L;
+    xyz[1] = -0.5*M;
+    nodes[3]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*L;
+    xyz[1] = -0.5*m;
+    nodes[4]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*l;
+    xyz[1] = -0.5*m;
+    nodes[5]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*l;
+    xyz[1] = -0.5*m;
+    nodes[6]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*L;
+    xyz[1] = -0.5*m;
+    nodes[7]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*L;
+    xyz[1] =  0.5*m;
+    nodes[8]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*l;
+    xyz[1] =  0.5*m;
+    nodes[9]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*l;
+    xyz[1] =  0.5*m;
+    nodes[10]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*L;
+    xyz[1] =  0.5*m;
+    nodes[11]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*L;
+    xyz[1] =  0.5*M;
+    nodes[12]->setXYZCoords(xyz);
+
+    xyz[0] = -0.5*l;
+    xyz[1] =  0.5*M;
+    nodes[13]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*l;
+    xyz[1] =  0.5*M;
+    nodes[14]->setXYZCoords(xyz);
+
+    xyz[0] =  0.5*L;
+    xyz[1] =  0.5*M;
+    nodes[15]->setXYZCoords(xyz);
+
+    mesh->addObjects( nodes);
+
+    FaceSequence faces(8);
+
+    faces[0] = Quadrilateral::newObject( nodes[0], nodes[1], nodes[5], nodes[4] );
+    faces[1] = Quadrilateral::newObject( nodes[1], nodes[2], nodes[6], nodes[5] );
+    faces[2] = Quadrilateral::newObject( nodes[2], nodes[3], nodes[7], nodes[6] );
+    faces[3] = Quadrilateral::newObject( nodes[4], nodes[5], nodes[9], nodes[8] );
+    faces[4] = Quadrilateral::newObject( nodes[6], nodes[7], nodes[11], nodes[10] );
+    faces[5] = Quadrilateral::newObject( nodes[8], nodes[9], nodes[13], nodes[12] );
+    faces[6] = Quadrilateral::newObject( nodes[9], nodes[10], nodes[14], nodes[13] );
+    faces[7] = Quadrilateral::newObject( nodes[10], nodes[11], nodes[15], nodes[14] );
+
+    mesh->addObjects( faces );
+
+    Edge *edge;
+    int   bmark;
+    bmark = 1;
+    edge = faces[0]->getEdgeAt(0);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 4;
+    edge = faces[0]->getEdgeAt(3);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 1;
+    edge = faces[1]->getEdgeAt(0);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 5;
+    edge = faces[1]->getEdgeAt(2);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 1;
+    edge = faces[2]->getEdgeAt(0);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 2;
+    edge = faces[2]->getEdgeAt(1);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 5;
+    edge = faces[3]->getEdgeAt(1);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 4;
+    edge = faces[3]->getEdgeAt(3);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 2;
+    edge = faces[4]->getEdgeAt(1);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 5;
+    edge = faces[4]->getEdgeAt(3);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 3;
+    edge = faces[5]->getEdgeAt(2);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 4;
+    edge = faces[5]->getEdgeAt(3);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 3;
+    edge = faces[6]->getEdgeAt(2);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 5;
+    edge = faces[6]->getEdgeAt(0);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 2;
+    edge = faces[7]->getEdgeAt(1);
+    edge->setAttribute("Boundary", bmark);
+
+    bmark = 3;
+    edge = faces[7]->getEdgeAt(2);
+    edge->setAttribute("Boundary", bmark);
+
+    mesh->getTopology()->collect_edges();
+
+    QuadRefiner refiner(mesh);
+    refiner.setNumOfIterations(3);
+    refiner.refineAll(14);
+
+    mesh->getTopology()->collect_edges();
+
+    JPoisson2D  poisson;
+    poisson.setOrder(1);
+    poisson.checkTangle(0);
+    poisson.setMesh(mesh);
+    poisson.setNumPrimaryFaceGaussPoints(9);
+
+    int val;
+
+    EdgeSequence edges;
+    for( int i = 0; i < 4; i++) {
+        mesh->getEntities("Boundary", i+1, edges);
+        assert( !edges.empty() ) ;
+        poisson.setField(edges, 100);
+    }
+    mesh->getEntities("Boundary", 5, edges);
+    poisson.setField(edges, 0);
+
+    poisson.solve();
+    poisson.saveAs("anim.vtk", "U");
+    cout << "New Data stored in anim.vtk" << endl;
+}
+
+
+
+int SwapPositions( Vertex *v1, Vertex *v2, vector<size_t> &permute)
+{
+    const Point3D p1 = v1->getXYZCoords();
+    const Point3D p2 = v2->getXYZCoords();
+
+    v1->setXYZCoords(p2);
+    v2->setXYZCoords(p1);
+
+    int id1 = v1->getID();
+    int id2 = v2->getID();
+    permute[id1] = id2;
+    permute[id2] = id1;
+}
+/////////////////////////////////////////////////////////////////////////////////////
+
+int testTangleK()
+{
+    NodeSequence nodes(6);
+    for( int i = 0; i < 6; i++) {
+        nodes[i] = Vertex::newObject();
+        nodes[i]->setID(i);
+    }
+    Point3D xyz;
+    xyz[0] = 0.0;
+    xyz[1] = 0.0;
+    xyz[2] = 0.0;
+    nodes[0]->setXYZCoords(xyz);
+
+    xyz[0] = 1.0;
+    xyz[1] = 0.0;
+    xyz[2] = 0.0;
+    nodes[1]->setXYZCoords(xyz);
+
+    xyz[0] = 0.5;
+    xyz[1] = 1.0;
+    xyz[2] = 0.0;
+    nodes[2]->setXYZCoords(xyz);
+
+    xyz[0] = 0.5;
+    xyz[1] = 0.0;
+    xyz[2] = 0.0;
+    nodes[3]->setXYZCoords(xyz);
+
+    xyz[0] = 1.5;
+    xyz[1] = 0.0;
+    xyz[2] = 0.0;
+    nodes[4]->setXYZCoords(xyz);
+
+    xyz[0] = 1.0;
+    xyz[1] = 1.0;
+    xyz[2] = 0.0;
+    nodes[5]->setXYZCoords(xyz);
+
+    Face *face1 = Triangle::newObject( nodes[0], nodes[1], nodes[2] );
+    Face *face2 = Triangle::newObject( nodes[5], nodes[4], nodes[3] );
+
+    JElasticity2D elastic;
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    MatrixXd Kp;
+    elastic.integrate( face1, face2, Kp);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+void patchTest(int e)
+{
+    int  xlength = 5.0;
+    int  ylength = 5.0;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << "4  2  0  0" << endl;
+    ofile << " 0  " << -0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << " 1  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << " 2  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+    ofile << " 3  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << "4  1 " << endl;
+    ofile << " 0  0  1  1 "  << endl;
+    ofile << " 1  1  2  2 "  << endl;
+    ofile << " 2  2  3  3 "  << endl;
+    ofile << " 3  3  0  4 "  << endl;
+    ofile << " 0 " << endl;
+    ofile.close();
+
+    system( "triangle -peq30a0.1 test.poly");
+
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "test.1.ele");
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+    elastic.checkTangle(0);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary(boundnodes);
+
+    assert( !boundnodes.empty() ) ;
+
+    for( int i = 0; i < boundnodes.size(); i++) {
+        const Point3D &xyz =  boundnodes[i]->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        elastic.fixX( boundnodes[i], u);
+        elastic.fixY( boundnodes[i], v);
+    }
+    elastic.solve();
+
+    elastic.saveAs("tmp.vtk", "V");
+
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+
+    size_t numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    vector<double> error( numnodes);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        double du = usol[i] - u;
+        double dv = vsol[i] - v;
+        error[i] = sqrt( du*du + dv*dv);
+        cout << x << "  " << y << "  " << error[i] << endl;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+int testmodel1()
+{
+    Mesh *mesh = Mesh::newObject();
+// mesh->readFromFile( "tmp.xml");
+    mesh->readFromFile( "./FEMTest/tangle3.xml");
+    mesh->getTopology()->search_boundary();
+
+    Mesh *quadmesh= AllQuadMeshGenerator::SimpleTris2Quads(mesh);
+    mesh = quadmesh;
+
+    mesh->getTopology()->collect_edges();
+    mesh->getTopology()->search_boundary();
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+    elastic.checkTangle(1);
+    elastic.setNumPrimaryFaceGaussPoints(3);
+    elastic.setNumSecondaryFaceGaussPoints(3);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary( boundnodes);
+
+    for( int i = 0; i < boundnodes.size(); i++) {
+        const Point3D &xyz =  boundnodes[i]->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        elastic.fixX( boundnodes[i], u);
+        elastic.fixY( boundnodes[i], v);
+    }
+
+    elastic.solve();
+  
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+
+    double umax = 0.0;
+    double vmax = 0.0;
+
+    int numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        cout << i << "  " << usol[i] << "  " << vsol[i] << " Exact " << u << "  " << v << endl;
+        umax = max( umax, fabs(usol[i] - u));
+        vmax = max( vmax, fabs(vsol[i] - v));
+    }
+
+    if( umax > 1.0E-10  || vmax > 1.0E-10)
+        cout << "Value do not match at " << endl;
+
+    cout << "Max Error: " << umax << " " << vmax << endl;
+
+    elastic.saveAs("anim.vtk", "U");
+    return 0;
+}
+////////////////////////////////////////////////////////////////////////////////////
+
+int testmodel2()
+{
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "./FEMTest/tangle2.xml");
+    mesh->getTopology()->search_boundary();
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary( boundnodes);
+
+    for( int i = 0; i < boundnodes.size(); i++) {
+        const Point3D &xyz =  boundnodes[i]->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        elastic.fixX( boundnodes[i], u);
+        elastic.fixY( boundnodes[i], v);
+    }
+    elastic.solve();
+
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+
+    double umax = 0.0;
+    double vmax = 0.0;
+
+    int numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        cout << i << "  " << usol[i] << "  " << vsol[i]
+             << " Exact " << u << "  " << v << endl;
+        umax = max( umax, fabs(usol[i] - u));
+        vmax = max( vmax, fabs(vsol[i] - v));
+        if( umax > 1.0E-10  || vmax > 1.0E-10) {
+            cout << "Value do not match at " << i << endl;
+            exit(0);
+        }
+    }
+
+    cout << "Max Error: " << umax << " " << vmax << endl;
+    elastic.saveAs("anim.vtk", "U");
+    return 0;
+}
+////////////////////////////////////////////////////////////////////////////////////
+
+int testmodel3()
+{
+    Mesh *mesh = Mesh::newObject();
+//    mesh->readFromFile( "FEMTest/tangle2.xml");
+    mesh->getTopology()->search_boundary();
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary( boundnodes);
+
+    elastic.solve();
+
+    mesh->saveAs("anim.vtk");
+    exit(0);
+
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+
+    double umax = 0.0;
+    double vmax = 0.0;
+
+    int numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        cout << i << "  " << usol[i] << "  " << vsol[i] << " Exact " << u << "  " << v << endl;
+        umax = max( umax, fabs(usol[i] - u));
+        vmax = max( vmax, fabs(vsol[i] - v));
+        if( umax > 1.0E-10  || vmax > 1.0E-10) {
+
+            cout << "Value do not match at " << i << endl;
+            exit(0);
+        }
+    }
+
+    cout << "Max Error: " << umax << " " << vmax << endl;
+    elastic.saveAs("anim.vtk", "U");
+    return 0;
+}
+////////////////////////////////////////////////////////////////////////////////////
+
+int testmodel4()
+{
+    vector<size_t> permute;
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "./FEMTest/tangle4.xml");
+    mesh->getTopology()->search_boundary();
+
+    int numnodes = mesh->getSize(0);
+    permute.resize(numnodes);
+    for( int i = 0; i < numnodes; i++)
+        permute[i] = i;
+    SwapPositions( mesh->getNodeAt(31), mesh->getNodeAt(66), permute);
+    SwapPositions( mesh->getNodeAt(35), mesh->getNodeAt(53), permute);
+    SwapPositions( mesh->getNodeAt(80), mesh->getNodeAt(29), permute);
+    SwapPositions( mesh->getNodeAt(65), mesh->getNodeAt(48), permute);
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+    elastic.checkTangle(1);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary( boundnodes);
+
+    for( int i = 0; i < boundnodes.size(); i++) {
+        const Point3D &xyz =  boundnodes[i]->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        elastic.fixX( boundnodes[i], u);
+        elastic.fixY( boundnodes[i], v);
+    }
+    elastic.solve();
+
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+    double umax = 0.0;
+    double vmax = 0.0;
+
+    numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        cout << i << "  " << usol[i] << "  " << vsol[i] << " Exact " << u << "  " << v << endl;
+        umax = max( umax, fabs(usol[i] - u));
+        vmax = max( vmax, fabs(vsol[i] - v));
+    }
+
+    if( umax > 1.0E-10  || vmax > 1.0E-10)
+        cout << "Value do not match at " <<  endl;
+
+    cout << "Max Error: " << umax << " " << vmax << endl;
+
+    elastic.saveAs("tmp.vtk", "U");
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////
+
+int testmodel6()
+{
+    int  xlength = 80.0;
+    int  ylength = 40.0;
+    double  radius1  = 10;
+    double  radius2  = 5;
+
+    int  npoints = 150;
+    double dtheta = 2*M_PI/( double)npoints;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << 3*npoints+4 << " 2  0  0" << endl;
+
+    int index = 0;
+    for( int i = 0; i < npoints; i++)  {
+        double x = radius1*cos(i*dtheta);
+        double y = radius1*sin(i*dtheta);
+        ofile << index++  << " " << x << "  " << y << endl;
+    }
+
+    for( int i = 0; i < npoints; i++)  {
+        double x = -20 + radius2*cos(i*dtheta);
+        double y = radius2*sin(i*dtheta);
+        ofile << index++  << " " << x << "  " << y << endl;
+    }
+
+    for( int i = 0; i < npoints; i++)  {
+        double x = 20 + radius2*cos(i*dtheta);
+        double y = radius2*sin(i*dtheta);
+        ofile << index++  << " " << x << "  " << y << endl;
+    }
+
+    ofile << 3*npoints   << "  " << -0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << 3*npoints+1 << "  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << 3*npoints+2 << "  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+    ofile << 3*npoints+3 << "  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << 3*npoints + 4 <<  "  1 " << endl;
+    int offset = 0;
+    for( int i = 0; i < npoints; i++)
+        ofile << offset+i << "  " << offset+i << " " << offset+(i+1)%npoints << " 5 " << endl;
+
+    offset = npoints;
+    for( int i = 0; i < npoints; i++)
+        ofile << offset+i << "  " << offset+i << " " << offset+(i+1)%npoints << " 6 " << endl;
+
+    offset = 2*npoints;
+    for( int i = 0; i < npoints; i++)
+        ofile << offset+i << "  " << offset+i << " " << offset+(i+1)%npoints << " 7 " << endl;
+
+    ofile << 3*npoints   << "  " << 3*npoints   << "  " << 3*npoints+1 <<  "  1 " << endl;
+    ofile << 3*npoints+1 << "  " << 3*npoints+1 << "  " << 3*npoints+2 <<  "  2 " << endl;
+    ofile << 3*npoints+2 << "  " << 3*npoints+2 << "  " << 3*npoints+3 <<  "  3 " << endl;
+    ofile << 3*npoints+3 << "  " << 3*npoints+3 << "  " << 3*npoints   <<  "  4 " << endl;
+
+    ofile << " 3 " << endl;
+    ofile << " 0   0.0  0.0 " << endl;
+    ofile << " 0  -20.0 0.0 " << endl;
+    ofile << " 0   20 0.0.0 " << endl;
+
+    ofile.close();
+    system( "triangle -peq30a1.0 test.poly");
+
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "test.1.ele");
+    mesh->saveAs("anim.vtk");
+    mesh->saveAs("./FEMTest/model6.xml");
+
+    JLocallyInjectiveMap localmap;
+    localmap.setMesh(mesh);
+    localmap.setBoundaryPreservation(0);
+
+    NodeSequence nodes;
+    EdgeSequence edges;
+
+    Array3D trans;
+    trans[0] = 0.0;
+    trans[1] = 0.0;
+    trans[2] = 0.0;
+
+    int val  = 1;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 3;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 4;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 5;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    JMeshNonlinearOptimization mopt;
+    mopt.setMesh(mesh);
+    mopt.setBoundaryPreservation(1);
+
+    val  = 5;
+    double sign = 1.0;
+
+    index = 0;
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 90; i++) {
+            mopt.improveShapes();
+
+            val  = 6;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+
+            val  = 7;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+
+    sign = -1.0;
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 90; i++) {
+            mopt.improveShapes();
+
+            val  = 6;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+
+            val  = 7;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+
+
+    /*
+        JElasticity2D  elastic;
+        elastic.setOrder(1);
+        elastic.setYoungModulus(100);
+        elastic.setPoissonRatio(0.25);
+        elastic.checkTangle(0);
+        elastic.setMesh(mesh);
+
+        EdgeSequence edges;
+
+        int val;
+        val  = 2;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.setXForce(edges, 100.0);
+
+        cout << edges.size() << endl;
+
+        val  = 4;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.setXForce(edges, -100.0);
+
+        val  = 5;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.fixEdges(edges);
+
+        elastic.solve();
+        elastic.saveAs("anim.vtk");
+        return mesh;
+    i*/
+}
+//////////////////////////////////////////////////////////////////////////////
+
+int testmodel7()
+{
+    int  xlength = 100.0;
+    int  ylength = 50.0;
+    double  radius  = 9.5;
+
+    int  npoints = 150;
+    double dtheta = 2*M_PI/( double)npoints;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << 2*npoints+4 << " 2  0  0" << endl;
+
+    int index = 0;
+    for( int i = 0; i < npoints; i++)  {
+        double x = -30.0 + radius*cos(i*dtheta);
+        double y =  10.0 + radius*sin(i*dtheta);
+        ofile << index++  << " " << x << "  " << y << endl;
+    }
+
+    for( int i = 0; i < npoints; i++)  {
+        double x =  30.0 + radius*cos(i*dtheta);
+        double y = -10.0 + radius*sin(i*dtheta);
+        ofile << index++  << " " << x << "  " << y << endl;
+    }
+
+    ofile << 2*npoints   << "  " << -0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << 2*npoints+1 << "  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << 2*npoints+2 << "  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+    ofile << 2*npoints+3 << "  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << 2*npoints + 4 <<  "  1 " << endl;
+    int offset = 0;
+    for( int i = 0; i < npoints; i++)
+        ofile << offset+i << "  " << offset+i << " " << offset+(i+1)%npoints << " 5 " << endl;
+
+    offset = npoints;
+    for( int i = 0; i < npoints; i++)
+        ofile << offset+i << "  " << offset+i << " " << offset+(i+1)%npoints << " 6 " << endl;
+
+    ofile << 2*npoints   << "  " << 2*npoints   << "  " << 2*npoints+1 <<  "  1 " << endl;
+    ofile << 2*npoints+1 << "  " << 2*npoints+1 << "  " << 2*npoints+2 <<  "  2 " << endl;
+    ofile << 2*npoints+2 << "  " << 2*npoints+2 << "  " << 2*npoints+3 <<  "  3 " << endl;
+    ofile << 2*npoints+3 << "  " << 2*npoints+3 << "  " << 2*npoints   <<  "  4 " << endl;
+
+    ofile << " 2 " << endl;
+    ofile << " 0   -30.0  10.0 " << endl;
+    ofile << " 0    30.0 -10.0 " << endl;
+
+    ofile.close();
+    system( "triangle -peq30a1.0 test.poly");
+
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "test.1.ele");
+
+    JLocallyInjectiveMap localmap;
+    localmap.setMesh(mesh);
+    localmap.setBoundaryPreservation(0);
+
+    NodeSequence nodes;
+    EdgeSequence edges;
+
+    Array3D trans;
+    trans[0] = 0.0;
+    trans[1] = 0.0;
+    trans[2] = 0.0;
+
+    int val  = 1;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 3;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 4;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    JMeshNonlinearOptimization mopt;
+    mopt.setMesh(mesh);
+    mopt.setBoundaryPreservation(1);
+
+    val  = 5;
+    double sign = 1.0;
+
+    index = 0;
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 30; i++) {
+            mopt.improveShapes();
+
+            val = 5;
+            trans[0] = 1.0;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.translate(nodes, trans);
+
+            val = 6;
+            trans[0] = -1.0;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.translate(nodes, trans);
+
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 30; i++) {
+            mopt.improveShapes();
+
+            val = 5;
+            trans[0] = -1.0;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.translate(nodes, trans);
+
+            val = 6;
+            trans[0] =  1.0;
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.translate(nodes, trans);
+
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+
+
+    /*
+        sign = -1.0;
+        for( int j = 0; j < 2; j++) {
+            for( int i = 0; i < 90; i++) {
+                mopt.improveShapes();
+                mesh->getEntities("Boundary", val, edges);
+                MeshTopology::getEntitySet( edges, nodes);
+                localmap.rotate(nodes, 2.0*sign);
+                double maxDist = localmap.solve();
+                cout << "MaxDist  " << maxDist << endl;
+                ostringstream oss;
+                oss << "./animateData/anim";
+                if( index < 10)  oss << "0";
+                if( index < 100) oss << "0";
+                oss << index << ".vtk";
+                mesh->saveAs( oss.str());
+                index++;
+            }
+            sign *= -1.0;
+        }
+    */
+
+    /*
+        JElasticity2D  elastic;
+        elastic.setOrder(1);
+        elastic.setYoungModulus(100);
+        elastic.setPoissonRatio(0.25);
+        elastic.checkTangle(0);
+        elastic.setMesh(mesh);
+
+        EdgeSequence edges;
+
+        int val;
+        val  = 2;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.setXForce(edges, 100.0);
+
+        cout << edges.size() << endl;
+
+        val  = 4;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.setXForce(edges, -100.0);
+
+        val  = 5;
+        mesh->getEntities("Boundary", val, edges);
+        elastic.fixEdges(edges);
+
+        elastic.solve();
+        elastic.saveAs("anim.vtk");
+        return mesh;
+    i*/
+}
+//////////////////////////////////////////////////////////////////////////////
+
+void testmodel8()
+{
+    int  xlength = 40.0;
+    int  ylength = 100.0;
+    double  radius  = 10.0;
+    double  height = 30.0;
+
+    int  npoints = 100;
+    double dtheta = 2*M_PI/( double)npoints;
+
+    ofstream ofile( "test.poly", ios::out);
+
+    ofile << npoints+4 << " 2  0  0" << endl;
+
+    for( int i = 0; i < npoints; i++)  {
+        double x = radius*cos(i*dtheta);
+        double y = height+radius*sin(i*dtheta);
+        ofile << i  << " " << x << "  " << y << endl;
+    }
+    ofile << npoints   << "  " << -0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << npoints+1 << "  " <<  0.5*xlength << " " << -0.5*ylength << endl;
+    ofile << npoints+2 << "  " <<  0.5*xlength << " " <<  0.5*ylength << endl;
+    ofile << npoints+3 << "  " << -0.5*xlength << " " <<  0.5*ylength << endl;
+
+    ofile << npoints + 4 <<  "  1 " << endl;
+    for( int i = 0; i < npoints; i++)
+        ofile << i << "  " << i << " " << (i+1)%npoints << " 5 " << endl;
+
+    ofile << npoints   << "  " << npoints   << "  " << npoints+1 <<  "  1 " << endl;
+    ofile << npoints+1 << "  " << npoints+1 << "  " << npoints+2 <<  "  2 " << endl;
+    ofile << npoints+2 << "  " << npoints+2 << "  " << npoints+3 <<  "  3 " << endl;
+    ofile << npoints+3 << "  " << npoints+3 << "  " << npoints   <<  "  4 " << endl;
+
+    ofile << " 1 " << endl;
+    ofile << " 0  0.0 " << height << endl;
+    ofile.close();
+    system( "triangle -peq30a10.0 test.poly");
+
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "test.1.ele");
+    mesh->saveAs("anim.vtk");
+    mesh->saveAs("FEMTest/model8.xml");
+    exit(0);
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.checkTangle(0);
+    elastic.setMesh(mesh);
+
+    EdgeSequence edges;
+
+    int val;
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    elastic.setXForce(edges, 100.0);
+
+    cout << edges.size() << endl;
+
+    val  = 4;
+    mesh->getEntities("Boundary", val, edges);
+    elastic.setXForce(edges, -100.0);
+
+    val  = 5;
+    mesh->getEntities("Boundary", val, edges);
+    elastic.fixEdges(edges);
+
+    elastic.solve();
+    elastic.saveAs("anim.vtk", "U");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void testmodel9()
+{
+    vector<size_t> permute;
+
+    int grid_dim[]   = {20, 10};
+    double length[]  = {10, 5};
+    double origin[]  = {0.0, 0.0};
+    /*
+        Mesh * mesh = getStructuredMesh(2, grid_dim, length, origin);
+        mesh->saveAs( "tmp.vtk");
+        exit(0);
+    */
+    Mesh *mesh = Mesh::newObject();
+    mesh->readFromFile( "./FEMTest/model9.xml");
+
+    mesh->getTopology()->search_boundary();
+
+    int numnodes = mesh->getSize(0);
+    permute.resize(numnodes);
+    for( int i = 0; i < numnodes; i++)
+        permute[i] = i;
+    SwapPositions( mesh->getNodeAt(116), mesh->getNodeAt(95), permute);
+    mesh->saveAs( "tmp.vtk");
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.setMesh(mesh);
+    elastic.checkTangle(0);
+
+    NodeSequence boundnodes;
+    mesh->getTopology()->getBoundary( boundnodes);
+
+    for( int i = 0; i < boundnodes.size(); i++) {
+        const Point3D &xyz =  boundnodes[i]->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        elastic.fixX( boundnodes[i], u);
+        elastic.fixY( boundnodes[i], v);
+    }
+    elastic.solve();
+
+    vector<double> usol, vsol;
+    elastic.getDisplacements(usol, vsol);
+    double umax = 0.0;
+    double vmax = 0.0;
+    double errmax = 0.0;
+
+
+    numnodes = mesh->getSize(0);
+    cout << fixed << setprecision(15);
+    vector<double> error( numnodes);
+    for( int i = 0; i < numnodes; i++) {
+        const Point3D &xyz =  mesh->getNodeAt(i)->getXYZCoords();
+        double x = xyz[0];
+        double y = xyz[1];
+        double u =  0.1*x - 0.2*y;
+        double v = -0.3*x + 0.5*y;
+        double du = usol[i] - u;
+        double dv = vsol[i] - v;
+        error[i] = sqrt( du*du + dv*dv);
+        /*
+        //      cout << i << "  " << usol[i] << "  " << vsol[i] << " Exact " << u << "  " << v << endl;
+                umax = max( umax, fabs(usol[i] - u));
+                vmax = max( vmax, fabs(vsol[i] - v));
+        */
+    }
+
+    if( umax > 1.0E-10  || vmax > 1.0E-10)
+        cout << "Value do not match" <<  endl;
+
+    cout << "Error " << endl;
+    sort( error.begin(), error.end() ) ;
+    for( int i = 0; i < error.size(); i++)
+        cout << i << "  " << error[i] << endl;
+
+
+    elastic.saveAs("tmp.vtk", "U");
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+int testmodel10()
+{
+    Mesh *mesh = Mesh::newObject();
+
+    vector<size_t> permute;
+
+    /*
+        int grid_dim[]   = {41, 21};
+        double length[]  = {10, 5};
+        double origin[]  = {0.0, 0.0};
+        mesh = getStructuredMesh(2, grid_dim, length, origin);
+        mesh->saveAs( "tmp.vtk");
+        exit(0);
+    */
+
+    mesh->readFromFile( "./FEMTest/model10.xml");
+
+    EdgeSequence edges;
+
+    permute.resize(mesh->getSize(0));
+
+    JElasticity2D  elastic;
+    elastic.setOrder(1);
+    elastic.setYoungModulus(100);
+    elastic.setPoissonRatio(0.25);
+    elastic.checkTangle(0);
+    elastic.setMesh(mesh);
+
+    int landmarks[] = { 0, 10, 20, 30, 40,
+                        245, 450, 491, 860,
+                        850, 840, 830, 820,
+                        451, 410, 205
+                      };
+
+
+    int val;
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    elastic.setYForce(edges, 100.0);
+
+    val  = 4;
+    mesh->getEntities("Boundary", val, edges);
+    elastic.fixEdges(edges);
+
+    /*
+        SwapPositions( mesh->getNodeAt(42), mesh->getNodeAt(817), permute);
+        SwapPositions( mesh->getNodeAt(780), mesh->getNodeAt(79), permute);
+        SwapPositions( mesh->getNodeAt(61), mesh->getNodeAt(799), permute);
+        SwapPositions( mesh->getNodeAt(411), mesh->getNodeAt(449), permute);
+        SwapPositions( mesh->getNodeAt(89), mesh->getNodeAt(745), permute);
+        SwapPositions( mesh->getNodeAt(115), mesh->getNodeAt(1607), permute);
+    */
+
+    mesh->getTopology()->search_boundary();
+
+    Point3D xyz;
+    for( int i = 0; i < 100; i++) {
+        Vertex *vtx = mesh->getRandomNode();
+        if( !vtx->isBoundary() )  {
+            xyz[0] = + 8*drand48();
+            xyz[1] = + 4*drand48();
+            xyz[2] =  0.0;
+            vtx->setXYZCoords(xyz);
+        }
+    }
+
+    elastic.solve();
+    elastic.saveAs("anim.vtk", "S");
+    cout << "New Data stored in anim.vtk" << endl;
+
+    cout << "Values at landmarks" << endl;
+    double nodeval;
+    for( int i = 0; i < 16; i++) {
+        xyz = mesh->getNodeAt(landmarks[i])->getXYZCoords();
+        cout << xyz[0] << "  " << xyz[1] <<  "  ";
+        elastic.getValueAt( 'U', landmarks[i], nodeval);
+        cout << nodeval << "  ";
+        elastic.getValueAt( 'V', landmarks[i], nodeval);
+        cout << nodeval << "  ";
+        elastic.getValueAt( 'S', landmarks[i], nodeval);
+        cout << nodeval << "  ";
+        cout << endl;
+    }
+
+
+    exit(0);
+
+    JLocallyInjectiveMap localmap;
+    localmap.setMesh(mesh);
+    localmap.setBoundaryPreservation(0);
+
+    NodeSequence nodes;
+
+    Array3D trans;
+    trans[0] = 0.0;
+    trans[1] = 0.0;
+    trans[2] = 0.0;
+
+    val  = 1;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 2;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 3;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    val  = 4;
+    mesh->getEntities("Boundary", val, edges);
+    MeshTopology::getEntitySet( edges, nodes);
+    localmap.translate(nodes, trans);
+
+    JMeshNonlinearOptimization mopt;
+    mopt.setMesh(mesh);
+    mopt.setBoundaryPreservation(1);
+
+    val  = 5;
+    int index = 0;
+    double sign = 1.0;
+
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 90; i++) {
+            mopt.improveShapes();
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+
+    sign = -1.0;
+    for( int j = 0; j < 2; j++) {
+        for( int i = 0; i < 90; i++) {
+            mopt.improveShapes();
+            mesh->getEntities("Boundary", val, edges);
+            MeshTopology::getEntitySet( edges, nodes);
+            localmap.rotate(nodes, 2.0*sign);
+            double maxDist = localmap.solve();
+            cout << "MaxDist  " << maxDist << endl;
+            ostringstream oss;
+            oss << "./animateData/anim";
+            if( index < 10)  oss << "0";
+            if( index < 100) oss << "0";
+            oss << index << ".vtk";
+            mesh->saveAs( oss.str());
+            index++;
+        }
+        sign *= -1.0;
+    }
+}
+///////////////////////////////////////////////////////////////////////////////////////
+#endif

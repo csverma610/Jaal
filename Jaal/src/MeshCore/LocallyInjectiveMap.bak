@@ -1,0 +1,541 @@
+// Copyright 2013 - Christian Schüller 2013, schuellc@inf.ethz.ch
+// Interactive Geometry Lab - ETH Zurich
+
+#include "LocallyInjectiveMap.hpp"
+
+using namespace std;
+using namespace Eigen;
+
+///////////////////////////////////////////////////////////////////////////////
+
+JLocallyInjectiveMap::JLocallyInjectiveMap()
+{
+    initParams();
+    limData = new LIMData();
+};
+///////////////////////////////////////////////////////////////////////////////
+
+JLocallyInjectiveMap::~JLocallyInjectiveMap()
+{
+    clear();
+};
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap:: initParams()
+{
+    energyType = AS_RIGID_AS_POSSIBLE_ENERGY;
+    dim   = 0;
+
+    enableBarriers = true;
+    enableSubstepping = true;
+    enableAlphaUpdate = true;
+    enableOutput = true;
+
+    enableLogBarriers = false;
+    enableNeoHookeanBarriers = false;
+    enableBarrierCompensation = false;
+    findLocalMinima = true;
+    enableBoundaryPreservation = 1;
+
+    positionalConstraintError = 0;
+
+    alpha = 1.0E+08;
+    alphaRatio = 1.0E+03;
+    beta  = 0.01;
+    gamma = 1.0;
+    smallestArea = -1;   // Default: 1.0E-05*smallest triangle...
+
+    iterCounter = 0;
+    maxIterations = 100;
+    limData = nullptr;
+
+    saveAnim = 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::initMesh()
+{
+    if( jaalMesh == nullptr ) return;
+
+    dim = jaalMesh->getTopology()->getDimension();
+    if( dim < 2 || dim > 3) {
+        cout << "Warning: Locallly injective mapping only for 2D and 3D simplicial elements" << endl;
+        return;
+    }
+    elemType =  jaalMesh->getTopology()->isHomogeneous(dim);
+
+    if( dim == 2 && elemType != 3) {
+        cout << "Warning: Locallly injective mapping only for 2D triangle elements" << endl;
+        return;
+    }
+
+    if( dim == 3 && elemType != 4) {
+        cout << "Warning: Locallly injective mapping only for 3D tetrahedra elements" << endl;
+        return;
+    }
+
+    jaalMesh->pruneAll();
+    jaalMesh->enumerate(0);
+
+
+
+    switch(elemType) {
+    case 3:
+        createTriMesh();
+        break;
+    case 4:
+        createTetMesh();
+        break;
+    }
+
+    if( deformMesh == nullptr ) return;
+
+    int numNodes = deformMesh->InitialVertices->rows();
+    int nSize    = numNodes*dim;
+    deformMesh->ConstraintMatrix->resize(nSize, nSize);
+    deformMesh->ConstraintTargets->resize(nSize);
+    deformMesh->ConstraintTargets->setZero();
+
+    // init with identity matrix in order to reserve single vertex constraints
+    vector<Eigen::Triplet<double> > triplets;
+    for(int i=0; i< nSize; i++)
+        triplets.push_back(Triplet<double>(i,i,1));
+    deformMesh->ConstraintMatrix->setFromTriplets(triplets.begin(),triplets.end());
+
+    initEnergy();
+
+    // free all constraint vertices as now hessian structure is already reserved
+    for(int i=0; i< nSize; i++)
+        deformMesh->ConstraintMatrix->coeffRef(i,i) = 0;
+
+    solver->UpdatePositionalConstraintMatrix();
+}
+///////////////////////////////////////////////////////////////////////////////
+double JLocallyInjectiveMap::getMaxDistance() const
+{
+    if( jaalMesh == nullptr ) return 0.0;
+
+    Point3D pdst, pcurr;
+
+    double maxDiff = 0;
+    int numNodes   =  jaalMesh->getSize(0);
+    for( int i = 0; i < numNodes; i++) {
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        int err = vtx->getAttribute("TargetPos", pdst);
+        if( !err) {
+            pcurr     = vtx->getXYZCoords();
+            double dx =  pdst[0] - pcurr[0];
+            double dy =  pdst[1] - pcurr[1];
+            double dz =  pdst[2] - pcurr[2];
+            maxDiff   =  std::max(maxDiff, dx*dx + dy*dy + dz*dz);
+        }
+    }
+    return maxDiff;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::setTargets()
+{
+    if( jaalMesh == nullptr ) return;
+
+    /*
+        jaalMesh->getTopology()->search_boundary();
+        NodeSequence nodes;
+        if( enableBoundaryPreservation) {
+            jaalMesh->getTopology()->getBoundary(nodes);
+            int nbound = nodes.size();
+            assert( nbound >= 3);
+            mesh->BorderVertices->resize(nbound);
+            for( int i = 0; i < nbound; i++)
+                mesh->BorderVertices->coeffRef(i) = nodes[i]->getID();
+        } else
+            mesh->BorderVertices->resize(0,1);
+        assert( dim == 2 );
+    */
+    int numNodes = jaalMesh->getSize(0);
+
+    // free all constraint vertices
+    for(int i=0; i< numNodes*dim; i++)
+        deformMesh->ConstraintMatrix->coeffRef(i,i) = 0;
+    deformMesh->ConstraintTargets->setZero();
+
+    int nCount = 0;
+
+    Point3D xyz;
+    for( int i = 0; i < numNodes; i++) {
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        if( vtx->isActive() ) {
+            if( vtx->hasAttribute("TargetPos") ) {
+                nCount++;
+                int vid = vtx->getID();
+                vtx->getAttribute("TargetPos", xyz);
+                for(int j=0; j< dim; j++) {
+                    deformMesh->ConstraintMatrix->coeffRef(vid*dim+j,vid*dim+j) = 1;
+                    deformMesh->ConstraintTargets->coeffRef(vid*dim+j) = xyz[j];
+                }
+            }
+            if( vtx->hasAttribute("Constraint")) {
+                int vid = vtx->getID();
+                xyz = vtx->getXYZCoords();
+                for(int j=0; j< dim; j++) {
+                    deformMesh->ConstraintMatrix->coeffRef(vid*dim+j,vid*dim+j) = 1;
+                    deformMesh->ConstraintTargets->coeffRef(vid*dim+j) = xyz[j];
+                }
+            }
+        }
+    }
+
+    if( nCount == 0)
+        cout << "Waarning: No vertex specified to move" << endl;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::updatePositionalConstraints(const vector<int>& constraintVertices)
+{
+    assert( dim == 2 || dim == 3 );
+
+    // free all constraint vertices
+    int nSize = deformMesh->InitialVertices->rows()*dim;
+    for(int i=0; i< nSize; i++)
+        deformMesh->ConstraintMatrix->coeffRef(i,i) = 0;
+    deformMesh->ConstraintTargets->setZero();
+
+    // set new constraint vertices
+    for(size_t i=0; i<constraintVertices.size(); i++) {
+        int idx = constraintVertices[i];
+        for(int c=0; c< dim; c++) {
+            deformMesh->ConstraintMatrix->coeffRef(idx*dim+c,idx*dim+c) = 1;
+            deformMesh->ConstraintTargets->coeffRef(idx*dim+c) = deformMesh->DeformedVertices->coeff(idx,c);
+        }
+    }
+
+    solver->UpdatePositionalConstraintMatrix();
+    solver->Restart();
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::initSolver3D()
+{
+    switch(energyType) {
+    case IDENTITY_ENERGY:
+        solver = new Identity_LIMSolver3D();
+        break;
+    case DIRICHLET_ENERGY:
+        solver = new Dirichlet_LIMSolver3D();
+        break;
+    case UNIFORM_LAPLACE_ENERGY:
+        solver = new UniformLaplacian_LIMSolver3D();
+        break;
+    case COTAN_LAPLACE_ENERGY:
+        solver = new Laplacian_LIMSolver3D();
+        break;
+    case GREEN_ENERGY:
+        solver = new GreenStrain_LIMSolver3D();
+        break;
+    case AS_RIGID_AS_POSSIBLE_ENERGY:
+        solver = new LGARAP_LIMSolver3D();
+        break;
+    case LEAST_SQUARE_CONFORMAL_ENERGY:
+        solver  = new GreenStrain_LIMSolver3D();
+        energyType = AS_RIGID_AS_POSSIBLE_ENERGY;
+        break;
+    case POISSON_ENERGY:
+        solver = new GreenStrain_LIMSolver3D();
+        energyType = AS_RIGID_AS_POSSIBLE_ENERGY;
+        break;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::initSolver2D()
+{
+
+    switch(energyType) {
+    case IDENTITY_ENERGY:
+        solver = new Identity_LIMSolver2D();
+        break;
+    case DIRICHLET_ENERGY:
+        solver= new Dirichlet_LIMSolver2D();
+        break;
+    case UNIFORM_LAPLACE_ENERGY:
+        solver = new UniformLaplacian_LIMSolver2D();
+        break;
+    case COTAN_LAPLACE_ENERGY:
+        solver = new Laplacian_LIMSolver2D();
+        break;
+    case GREEN_ENERGY:
+        solver = new GreenStrain_LIMSolver2D();
+        break;
+    case AS_RIGID_AS_POSSIBLE_ENERGY:
+        solver = new LGARAP_LIMSolver2D();
+        break;
+    case LEAST_SQUARE_CONFORMAL_ENERGY:
+        solver = new LSConformal_LIMSolver2D();
+        break;
+    case POISSON_ENERGY:
+        solver = new Poisson_LIMSolver2D();
+        break;
+    }
+}
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::initEnergy()
+{
+    if( dim == 2) initSolver2D();
+    if( dim == 3) initSolver3D();
+
+    solver->EnableBarriers = enableBarriers;
+    if(beta != -1) solver->Beta = beta;
+
+    limData->solver = solver;
+    if(deformMesh) solver->Init(deformMesh);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::setEnergyType(int energy)
+{
+    energyType = energy;
+    initEnergy();
+}
+///////////////////////////////////////////////////////////////////////////////
+
+int JLocallyInjectiveMap::getEnergy() const
+{
+    return energyType;
+}
+///////////////////////////////////////////////////////////////////////////////
+
+int JLocallyInjectiveMap::createTriMesh()
+{
+    TriangleMesh *triMesh = nullptr;
+    elemType = jaalMesh->getTopology()->isHomogeneous(2);
+
+    if( elemType != 3 ) {
+        cout << "Error: Locally injective mapping require all triangle elements " << endl;
+        return 1;
+    }
+    limData->isTetMesh = 0;
+
+    const int numNodes  = jaalMesh->getSize(0);
+    const int numTriangles = jaalMesh->getSize(2);
+    if( numTriangles < 1 ) return 1;
+
+    triMesh = new TriangleMesh();
+    triMesh->IsCorotatedTriangles = false;
+
+    triMesh->Triangles = new Matrix<int,Dynamic,3>();
+    triMesh->BorderVertices = new Matrix<int,Dynamic,1>();
+    triMesh->InitialVertices    = new Matrix<double,Dynamic,3>();
+    triMesh->DeformedVertices   = new Matrix<double,Dynamic,3>();
+    triMesh->PredictedVertices  = new Matrix<double,Dynamic,3>();
+    triMesh->ConstraintMatrix   = new SparseMatrix<double>();
+    triMesh->ConstraintTargets  = new Matrix<double,Dynamic,1>();
+    triMesh->InitialVertices->resize(numNodes,3);
+    triMesh->DeformedVertices->resize(numNodes,3);
+    triMesh->PredictedVertices->resize(numNodes,3);
+    for(int i=0; i< numNodes; i++) {
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        const Point3D  &xyz = vtx->getXYZCoords();
+        assert( vtx->isActive() );
+        for(int j=0; j< 3; j++) {
+            triMesh->InitialVertices->coeffRef(i,j)   = xyz[j];
+            triMesh->DeformedVertices->coeffRef(i,j)  = xyz[j];
+            triMesh->PredictedVertices->coeffRef(i,j) = xyz[j];
+        }
+    }
+
+    triMesh->Triangles->resize(numTriangles,3);
+    for(int i=0; i < numTriangles; i++) {
+        const JFacePtr &face = jaalMesh->getFaceAt(i);
+        for(int j= 0; j< 3; j++)
+            triMesh->Triangles->coeffRef(i,j) = face->getNodeAt(j)->getID();
+    }
+
+    triMesh->InitMesh();
+    triMesh->EPS3 = smallestArea;
+    limData->mesh = triMesh;
+    limData->iteration = 0;
+
+    return 0;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+
+int JLocallyInjectiveMap::createTetMesh()
+{
+    if( jaalMesh == nullptr) return 1;
+
+    const int numNodes  = jaalMesh->getSize(0);
+    const int numCells  = jaalMesh->getSize(3);
+
+    limData->isTetMesh = 1;
+    TetrahedronMesh *tetMesh = new TetrahedronMesh();
+
+    // Create new object
+    tetMesh->Tetrahedra        = new Matrix<int,Dynamic,4>();
+    tetMesh->InitialVertices   = new Matrix<double,Dynamic,3>();
+    tetMesh->DeformedVertices  = new Matrix<double,Dynamic,3>();
+    tetMesh->PredictedVertices = new Matrix<double,Dynamic,3>();
+    tetMesh->ConstraintMatrix  = new SparseMatrix<double>();
+    tetMesh->ConstraintTargets = new Matrix<double,Dynamic,1>();
+
+    tetMesh->InitialVertices->resize(numNodes,3);
+    tetMesh->DeformedVertices->resize(numNodes,3);
+    tetMesh->PredictedVertices->resize(numNodes,3);
+
+    for(int i=0; i< numNodes; i++) {
+        const JNodePtr &v = jaalMesh->getNodeAt(i);
+        const Point3D xyz = v->getXYZCoords();
+        for(int j=0; j< 3; j++) {
+            tetMesh->InitialVertices->coeffRef(i,j)   = xyz[j];
+            tetMesh->DeformedVertices->coeffRef(i,j)  = xyz[j];
+            tetMesh->PredictedVertices->coeffRef(i,j) = xyz[j];
+        }
+    }
+
+    tetMesh->Tetrahedra->resize(numCells,4);
+    for(int i=0; i < numCells; i++) {
+        const JCellPtr &cell = jaalMesh->getCellAt(i);
+        for(int j= 0; j< 4; j++)
+            tetMesh->Tetrahedra->coeffRef(i,j) = cell->getNodeAt(j)->getID();
+    }
+
+    tetMesh->InitMesh();
+    deformMesh = tetMesh;
+
+    return 0;
+}
+//////////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::updateMesh()
+{
+    if( jaalMesh == nullptr || deformMesh == nullptr ) return;
+
+    const int numNodes  = jaalMesh->getSize(0);
+    Point3D xyz;
+    for(int i=0; i< numNodes; i++) {
+        for(int j=0; j< 3; j++)
+            xyz[j] = deformMesh->DeformedVertices->coeff(i,j);
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        vtx->setXYZCoords(xyz);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void JLocallyInjectiveMap::setOriginalMesh() const
+{
+    if( jaalMesh == nullptr || deformMesh == nullptr ) return;
+    const int numNodes  = jaalMesh->getSize(0);
+
+    Point3D xyz;
+    for(int i=0; i< numNodes; i++) {
+        for(int j=0; j< 3; j++)
+            xyz[j] = deformMesh->InitialVertices->coeff(i,j);
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        vtx->setXYZCoords(xyz);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void JLocallyInjectiveMap::setDeformedMesh() const
+{
+    if( jaalMesh == nullptr || deformMesh == nullptr ) return;
+    const int numNodes  = jaalMesh->getSize(0);
+
+    Point3D xyz;
+    xyz[0] = 0.0;
+    xyz[1] = 0.0;
+    xyz[2] = 0.0;
+    for(int i=0; i< numNodes; i++) {
+        const JNodePtr &vtx = jaalMesh->getNodeAt(i);
+        for(int j=0; j< 3; j++)
+            xyz[j] = deformMesh->DeformedVertices->coeff(i,j);
+        vtx->setXYZCoords(xyz);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+
+bool JLocallyInjectiveMap:: hasConverged() const
+{
+    double tolerance = 1.0E-08;
+    if(solver->CurrentStepSize < 1e-15 ) return 1;
+    if(solver->CurrentPositionalEnergy <= tolerance && findLocalMinima == false ) return 1;
+    return 0;
+}
+///////////////////////////////////////////////////////////////////////////////////
+
+int JLocallyInjectiveMap::initSolver( bool val)
+{
+
+    /*
+    vector<int>    borderVertices;
+    Matrix<double,Dynamic,1> gradients;
+
+        int nbound = trimesh->BorderVertices->rows();
+        borderVertices.resize(nbound);
+        for( int i = 0; i < nbound; i++)
+            borderVertices[i] = trimesh->BorderVertices->coeff(i);
+
+    limData = InitLIM( *deformMesh->DeformedVertices, *deformMesh->InitialVertices, *deformMesh->elements,
+                       borderVertices, gradients, deformMesh->ConstraintMatrix,
+                       *deformMesh->ConstraintTargets, energyType, false, true);
+    */
+    return 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+int JLocallyInjectiveMap::stepSolver()
+{
+    /*
+        if( limData ) {
+            setTargets();
+            ComputeLIM_Step(limData, *mesh->DeformedVertices);
+            updateMesh();
+            return 0;
+        }
+    */
+    return 1;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+double JLocallyInjectiveMap::solve()
+{
+    double maxDist, eps = 1.0E-10;
+
+    maxDist = getMaxDistance();
+    if( maxDist < eps) return eps;
+
+    setTargets();
+
+    vector<int>    borderVertices;
+    Matrix<double,Dynamic,1> gradients;
+    Eigen::Matrix<int,Eigen::Dynamic,Eigen::Dynamic> elements;
+
+    if( elemType == 3 ) {
+   
+
+
+    }
+
+
+    ComputeLIM( *deformMesh->DeformedVertices, *deformMesh->InitialVertices, *deformMesh->elements,
+                borderVertices, gradients, *deformMesh->ConstraintMatrix, *deformMesh->ConstraintTargets,
+                energyType, tolerance, maxIterations, findLocalMinima, enableOutput,
+                enableAlphaUpdate, beta);
+
+    updateMesh();
+
+    maxDist = getMaxDistance();
+    return maxDist;
+}
+
+////////////////////////////////////////////////////////////////////////////////
