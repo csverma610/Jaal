@@ -1,14 +1,10 @@
-#include "BinaryTree.hpp"
-
-using namespace Jaal;
+#include "JBinaryTree.hpp"
 
 #ifdef CSV
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::deleteAll()
+void JBinaryTree::deleteAll()
 {
     TNodeMap ::iterator it;
     for (it = tnodemap.begin(); it != tnodemap.end(); ++it)
@@ -18,14 +14,14 @@ void BinaryTree::deleteAll()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::clear()
+void JBinaryTree::clear()
 {
     tnodemap.clear();
     levelnodes.clear();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-void BinaryTree::relinkAll()
+void JBinaryTree::relinkAll()
 {
     TNodeMap::iterator it;
     for (it = tnodemap.begin(); it != tnodemap.end(); ++it) {
@@ -36,7 +32,7 @@ void BinaryTree::relinkAll()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int BinaryTree::getHeight() const
+int JBinaryTree::getHeight() const
 {
     map<int, TNodeList>::const_iterator it;
 
@@ -49,13 +45,13 @@ int BinaryTree::getHeight() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-size_t BinaryTree::getSize() const
+size_t JBinaryTree::getSize() const
 {
     return tnodemap.size();
 }
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::bfs_traverse(TreeNode *parent, TNodeList &nextnodes)
+void JBinaryTree::bfs_traverse(TreeNode *parent, TNodeList &nextnodes)
 {
     JNodePtr dualnode = parent->getDualNode();
 
@@ -87,7 +83,7 @@ void BinaryTree::bfs_traverse(TreeNode *parent, TNodeList &nextnodes)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::dfs_traverse(TreeNode *parent, TNodeList &nextnodes)
+void JBinaryTree::dfs_traverse(TreeNode *parent, TNodeList &nextnodes)
 {
     JNodePtr dualnode = parent->getDualNode();
 
@@ -125,7 +121,7 @@ void BinaryTree::dfs_traverse(TreeNode *parent, TNodeList &nextnodes)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::dfs_traverse(TreeNode *parent)
+void JBinaryTree::dfs_traverse(TreeNode *parent)
 {
     TNodeList listnodes;
     listnodes.push_back(parent);
@@ -139,7 +135,7 @@ void BinaryTree::dfs_traverse(TreeNode *parent)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::bfs_traverse(TreeNode *parent)
+void JBinaryTree::bfs_traverse(TreeNode *parent)
 {
     TNodeList listnodes;
     listnodes.push_back(parent);
@@ -153,7 +149,7 @@ void BinaryTree::bfs_traverse(TreeNode *parent)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-const TNodeList &BinaryTree::getLevelNodes(int level) const
+const TNodeList &JBinaryTree::getLevelNodes(int level) const
 {
     map<int, TNodeList>::const_iterator it;
 
@@ -165,7 +161,7 @@ const TNodeList &BinaryTree::getLevelNodes(int level) const
 }
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::build(TreeNode *r)
+void JBinaryTree::build(TreeNode *r)
 {
     assert( dgraph);
 
@@ -225,12 +221,12 @@ void BinaryTree::build(TreeNode *r)
         levelnodes[lid].push_back(tnode);
     }
 
-    cout << " Binary Tree Build Completed : #Nodes : " << getSize() << endl;
+    cout << " JBinary Tree Build Completed : #Nodes : " << getSize() << endl;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void BinaryTree::saveAs(const string &fname)
+void JBinaryTree::saveAs(const string &fname)
 {
     string filename = fname + ".dot";
     ofstream ofile(filename.c_str(), ios::out);

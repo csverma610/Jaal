@@ -3,7 +3,7 @@
 
 
 void
-Jaal::set_tfi_coords(int i, int j, int nx, int ny, JNodeSequence &qnodes)
+set_tfi_coords(int i, int j, int nx, int ny, JNodeSequence &qnodes)
 {
     int offset;
 

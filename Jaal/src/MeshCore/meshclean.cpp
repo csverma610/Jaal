@@ -5,9 +5,7 @@
 #include "DijkstraShortestPath.hpp"
 #include "ObjectPool.hpp"
 
-extern int QuadPatches(Jaal::Mesh *mesh);
-
-using namespace Jaal;
+extern int QuadPatches(JMesh *mesh);
 
 void usage()
 {
@@ -38,8 +36,8 @@ void usage()
 
 int main(int argc, char **argv)
 {
-    Jaal::Mesh *mesh = new Jaal::Mesh2D;
-    Jaal::MeshOptimization mopt;
+    JMesh *mesh = new JMesh2D;
+    JMeshOptimization mopt;
 
     string infilename, outfilename;
 
@@ -140,7 +138,7 @@ int main(int argc, char **argv)
         mesh->reverse();
         break;
     case 9:
-        qpath = Jaal::generate_quad_partitioning(mesh);
+        qpath = JQuadMesh::generate_quad_partitioning(mesh);
         break;
     case 10:
         mesh->refine_quads14();
@@ -149,11 +147,11 @@ int main(int argc, char **argv)
         mesh->refine_quads15();
         break;
     case 12:
-        q2t = Jaal::quad_to_tri4( mesh, steiner);
+        q2t = JQuadMesh::quad_to_tri4( mesh, steiner);
         q2t->saveAs("tmesh.off");
         break;
     case 13:
-        q2t = Jaal::quad_to_tri2( mesh );
+        q2t = JQuadMesh::quad_to_tri2( mesh );
         mopt.shape_optimize( q2t );
         q2t->saveAs("tmesh.off");
         break;

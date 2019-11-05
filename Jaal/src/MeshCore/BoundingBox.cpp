@@ -203,10 +203,10 @@ int JBoundingBox :: getOrientation( const JBoundingBox &box, const Point3D &p)
 
 bool JBoundingBox :: intersect( const JBoundingBox &box1, const JBoundingBox &box2)
 {
-    const Point3D &p0 = box1.getLower();
-    const Point3D &p1 = box1.getUpper();
-    const Point3D &p2 = box2.getLower();
-    const Point3D &p3 = box2.getUpper();
+    const auto &p0 = box1.getLower();
+    const auto &p1 = box1.getUpper();
+    const auto &p2 = box2.getLower();
+    const auto &p3 = box2.getUpper();
 
     for( int i = 0; i < 3; i++) {
         if( p2[i] > p1[i] ) return 0;
@@ -234,7 +234,7 @@ void JBoundingBox :: setUnion(const JBoundingBox &box)
 ///////////////////////////////////////////////////////////////////////////////
 
 /*
-ostream& operator << (ostream &os, const Jaal::BoundingBox &box)
+ostream& operator << (ostream &os, const JBoundingBox &box)
 {
      Point3D p3d;
 
