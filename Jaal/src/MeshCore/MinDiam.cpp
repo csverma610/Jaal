@@ -33,7 +33,7 @@
 #include  <vector>
 #include  <algorithm>
 
-#include  "MinDiam.hpp"
+#include  "Geometry/MinDiam.hpp"
 
 using namespace std;
 

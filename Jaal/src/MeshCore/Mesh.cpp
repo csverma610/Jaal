@@ -1,18 +1,10 @@
 #include <iomanip>
 
-#include "Mesh.hpp"
-#include "MeshGeometry.hpp"
-#include "MeshTopology.hpp"
-
-/*
-#include "MeshImporter.hpp"
-#include "MeshExporter.hpp"
-#include "basic_math.hpp"
-#include <complex>
-*/
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/MeshGeometry.hpp"
+#include "MeshCore/MeshTopology.hpp"
 
 using namespace std;
-
 size_t JMesh::nCounter = 0;
 
 JLogger* JMesh::logger =  JLogger::getInstance();

@@ -1,4 +1,4 @@
-#include "Mesh.hpp"
+#include "MeshCore/Mesh.hpp"
 
 JLogger* JMeshRelationManager::logger = JLogger::getInstance();
 

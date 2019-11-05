@@ -1,9 +1,7 @@
-#include "MeshGeometry.hpp"
-#include "MinDiam.hpp"
-#include "MinBall.hpp"
-#include "MeshQuality.hpp"
-
-using namespace std;
+#include "MeshCore/MeshGeometry.hpp"
+#include "MeshCore/MeshQuality.hpp"
+#include "Geometry/MinDiam.hpp"
+#include "Geometry/MinBall.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 

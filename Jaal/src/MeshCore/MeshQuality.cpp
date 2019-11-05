@@ -1,5 +1,6 @@
-#include "MeshQuality.hpp"
-#include "range_stl.hpp"
+#include "MeshCore/MeshQuality.hpp"
+#include "MeshCore/range_stl.hpp"
+
 #include <verdict.h>
 #include <algorithm>
 

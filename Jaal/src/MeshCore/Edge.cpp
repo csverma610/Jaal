@@ -1,7 +1,7 @@
-#include "Mesh.hpp"
-#include "Geometry.hpp"
-#include "GeomPredicates.hpp"
-#include "tfiblend.hpp"
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/Geometry.hpp"
+#include "MeshCore/GeomPredicates.hpp"
+#include "MeshCore/tfiblend.hpp"
 
 std::map<string,string> JEdge::attribInfo;
 

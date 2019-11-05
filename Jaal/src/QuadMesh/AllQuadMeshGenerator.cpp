@@ -1,9 +1,9 @@
 #include <iostream>
 
-#include "AllQuadMeshGenerator.hpp"
-#include "Doublet.hpp"
-#include "MeshRefine.hpp"
-#include "DelaunayMesh.hpp"
+#include "QuadMesh/AllQuadMeshGenerator.hpp"
+#include "QuadMesh/Doublet.hpp"
+#include "MeshCore/MeshRefine.hpp"
+#include "TriMesh/DelaunayMesh.hpp"
 
 /*
 #include "BinaryTreeMatch.hpp"
@@ -11,8 +11,6 @@
 #include "Doublet.hpp"
 #include "EdmondGraphMatching.hpp"
 */
-
-using namespace Jaal;
 
 ////////////////////////////////////////////////////////////////////////////////
 void AllQuadMeshGenerator :: setMesh( const JMeshPtr &m)

@@ -1,6 +1,7 @@
 #include <iomanip>
 
-#include "MeshTopology.hpp"
+#include "MeshCore/MeshTopology.hpp"
+
 /*
 #include "Mesh.hpp"
 #include "basic_math.hpp"
@@ -9,7 +10,6 @@
 */
 
 using namespace std;
-using namespace Jaal;
 
 ///////////////////////////////////////////////////////////////////////////////
 

@@ -1,12 +1,12 @@
 #include <iomanip>
 
-#include "Poisson2D.hpp"
-#include "AllQuadMeshGenerator.hpp"
+#include "FEM/Poisson2D.hpp"
+#include "QuadMesh/AllQuadMeshGenerator.hpp"
 /*
-#include"MeshOptimization.hpp"
-#include "MeshRefine.hpp"
-#include "AllTriMeshGenerator.hpp"
-#include "AllQuadMeshGenerator.hpp"
+#include "MeshCore/MeshOptimization.hpp"
+#include "MeshCore/MeshRefine.hpp"
+#include "TriMesh/AllTriMeshGenerator.hpp"
+#include "QuadMesh/AllQuadMeshGenerator.hpp"
 */
 
 

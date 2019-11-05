@@ -1,12 +1,12 @@
 #include <iomanip>
 
-#include "Mesh.hpp"
-#include "basic_math.hpp"
-#include "MeshAffineTransforms.hpp"
-#include "MeshQuality.hpp"
-#include "tfiblend.hpp"
-#include "Geometry.hpp"
-#include "CircumCenter.hpp"
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/basic_math.hpp"
+#include "MeshCore/MeshQuality.hpp"
+#include "MeshCore/tfiblend.hpp"
+#include "MeshCore/Geometry.hpp"
+#include "MeshCore/CircumCenter.hpp"
+#include "Geometry/MeshAffineTransforms.hpp"
 
 
 using namespace std;

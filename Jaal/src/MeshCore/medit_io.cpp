@@ -1,4 +1,4 @@
-#include "MeshImporter.hpp"
+#include "MeshCore/MeshImporter.hpp"
 
 JMeshPtr JMeshMeditImporter ::readFile( const string &fname)
 {

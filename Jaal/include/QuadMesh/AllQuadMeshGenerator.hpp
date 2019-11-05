@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Mesh.hpp"
+#include "MeshCore/Mesh.hpp"
 
 class  JQuadExtractor
 {

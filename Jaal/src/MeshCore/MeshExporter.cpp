@@ -1,4 +1,4 @@
-#include "MeshExporter.hpp"
+#include "MeshCore/MeshExporter.hpp"
 
 JLogger* JMeshExporter :: logger = JLogger::getInstance();
 

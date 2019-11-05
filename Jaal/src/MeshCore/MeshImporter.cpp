@@ -1,4 +1,4 @@
-#include "MeshImporter.hpp"
+#include "MeshCore/MeshImporter.hpp"
 
 JLogger* JMeshImporter::logger = JLogger::getInstance();
 

@@ -1,5 +1,5 @@
-#include "Mesh.hpp"
-#include "basic_math.hpp"
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/basic_math.hpp"
 
 using namespace std;
 

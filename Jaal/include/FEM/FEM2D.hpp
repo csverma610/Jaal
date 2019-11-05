@@ -1,10 +1,11 @@
 #pragma once
 
-#include "Mesh.hpp"
 #include <Eigen/Core>
-#include "SparseMatrix.hpp"
-#include "StopWatch.hpp"
-#include "FEMSpace.hpp"
+
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/SparseMatrix.hpp"
+#include "MeshCore/StopWatch.hpp"
+#include "FEM/FEMSpace.hpp"
 
 /*
 #include "MeshTangle.hpp"

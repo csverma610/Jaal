@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Mesh.hpp"
-#include "MeshOptimization.hpp"
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/MeshOptimization.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 class JDoublet : public JMeshTopologyOptimization

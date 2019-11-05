@@ -1,15 +1,6 @@
 #pragma once
 
-#include "Mesh.hpp"
-
-/*
-#include <vector>
-#include <algorithm>
-#include <Eigen/Dense>
-#include <Eigen/Sparse>
-using namespace Eigen;
-using namespace std;
-*/
+#include "MeshCore/Mesh.hpp"
 
 struct JFiniteElement {
     JFiniteElement() {}

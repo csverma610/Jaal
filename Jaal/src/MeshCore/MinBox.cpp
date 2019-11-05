@@ -4,8 +4,8 @@
 #include  <memory.h>
 #include  <math.h>
 
-#include "MeshGeometry.hpp"
-#include "MinDiam.hpp"
+#include "MeshCore/MeshGeometry.hpp"
+#include "Geometry/MinDiam.hpp"
 
 #ifdef CSV
 JSphere JMeshGeometry :: getMinimumSphere()

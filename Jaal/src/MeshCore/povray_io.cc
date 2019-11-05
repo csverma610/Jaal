@@ -1,6 +1,6 @@
-#include "MeshExporter.hpp"
-#include "MeshGeometry.hpp"
-#include "MeshTopology.hpp"
+#include "MeshCore/MeshExporter.hpp"
+#include "MeshCore/MeshGeometry.hpp"
+#include "MeshCore/MeshTopology.hpp"
 
 void JMeshPOVExporter :: writeheader( const JMeshPtr &mesh, ofstream &ofile )
 {

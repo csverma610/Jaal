@@ -1,5 +1,5 @@
-#include "MeshExporter.hpp"
-#include "MeshImporter.hpp"
+#include "MeshCore/MeshExporter.hpp"
+#include "MeshCore/MeshImporter.hpp"
 
 int JMeshXMLImporter :: readAttributeHeader( ifstream &infile, string &name, string &type, size_t &ncount)
 {

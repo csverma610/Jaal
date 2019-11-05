@@ -1,17 +1,15 @@
 #pragma once
-#include "Mesh.hpp"
-#include "GeomPredicates.hpp"
-#include "CircumCenter.hpp"
-#include "SwapEdges.hpp"
+
+#include "MeshCore/Mesh.hpp"
+#include "MeshCore/GeomPredicates.hpp"
+#include "MeshCore/CircumCenter.hpp"
+//#include "TriMesh/SwapTriEdges.hpp"
 
 #define REAL double
 #define ANSI_DECLARATORS
 extern "C" {
 #include <triangle.h>
 }
-
-namespace Jaal
-{
 
 struct JDelaunayMesh2D {
     // Check if the edge is a Delunay. If the Coordinates are (x,y,z = 0), circumcircle
@@ -176,7 +174,4 @@ private:
     void   build( vector<double> &uvCoords, vector<int> &segments,
                   vector<double> &holeCoords);
 };
-
-}
-
 
